@@ -31,16 +31,23 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		isEdit = false, //是否是编辑
 		isView = false, //是否是预览
 		currentPaint = null, //当前是否是多边形的画图模式
+		currentShapeForm = {},//记录当前表单的事件是什么
 		markIcon = L.Icon.extend({
 			options: {
 				iconUrl: './img/util/mark.png',
 				iconSize: [20, 20]
 			}
 		}),
+		dropMapping={//下拉框键值映射
+			"0":"多边形"
+		},
 		latlngs = {
 			data: {},
 			len: 0
 		}, //临时存储勾选内容的坐标 id = [lat,lng]
+		modeValue = { // 设置表单时的默认值
+			"0":function(layerId,bodyId){form.val('polyLineMenuAddForm',{bodyId:bodyId,layerId:layerId});currentShapeForm=form.val('polyLineMenuAddForm');}
+		},
 		plainFuncIndex={},//弹窗的索引
 		plainFuncWindow = {//对应的工具弹框
 			"0":function(flag){
@@ -67,6 +74,8 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		plainFunc = {
 			"0": function(e) { //多边形
 				var latlng = e.latlng,
+					layerId = currentShapeForm.layerId,
+					bodyId = currentShapeForm.bodyId,
 					map = tabMap['1'],
 					lat = latlng.lat.toFixed(3),
 					lng = latlng.lng.toFixed(3),
@@ -74,6 +83,11 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					mark = L.marker([lat, lng], {
 						icon: new markIcon()
 					}).addTo(map).bindPopup("是这个点");
+				// 是否有对这个表单下面的内容是否有赋值
+				if(leftItemHtmlOperator.isEmptyData(layerId,bodyId)){
+					// 需要初始化
+					leftItemHtmlOperator.initData(layerId,bodyId,polylinesObj);
+				}
 				latlngs.data[id] = [lat, lng];
 				latlngs.len += 1;
 				laytpl(POLYLINE_MENU_ITEM).render({
@@ -82,8 +96,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					lng: lng
 				}, function(html) {
 					polylineList.append(html);
-					polylinesObj.marks[id] = mark;
-					polylinesObj.marksPanel[id] = $("#" + id);
+					leftItemHtmlOperator.insertPolyline(layerId,bodyId,id,{obj:mark,data:[lat, lng]});
+					// leftItemHtmlOperator.data(layerId,bodyId).marks[id] = mark;
+					// leftItemHtmlOperator.data(layerId,bodyId).marksPanel[id] = $("#" + id);
 				});
 				//删除一次，再重新刷新
 				// if (latlngs.length == 0) {
@@ -106,7 +121,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				// 	}).addTo(map);
 				// }
 			}
-		}
+		};
 
 
 
@@ -134,7 +149,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				 kid:{
 					 //挂在到某个页面上的余下子菜单
 					 id:{
-						 obj://对应的对象
+						 //是多边形，还是圆形或者其他图形
+						 type:"0"
+						 obj://对应的数据对象
 					 }
 				 }
 			 }
@@ -142,6 +159,40 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			}
 		 */
 		leftItemHtml = {},
+		leftItemHtmlOperator = {//操作面板内容的对象
+			checkDataExist:function(layerId,bodyId){
+				return leftItemHtml[layerId].kids[bodyId].data!=null;
+			},
+			isEmptyData:function(layerId,bodyId){
+				return leftItemHtml[layerId].kids[bodyId].data==null;
+			},
+			initData:function(layerId,bodyId,objStruct){
+				leftItemHtml[layerId].kids[bodyId].data = objStruct;
+			},
+			data:function(layerId,bodyId){
+				return leftItemHtml[layerId].kids[bodyId].data;
+			},
+			insertPolygon:function(layerId,bodyId,id,params){
+				leftItemHtml[layerId].kids[bodyId].data.polygon[id] = params;
+				leftItemHtml[layerId].kids[bodyId].data.polygonPanel[id] = $("#"+id);
+			},
+			insertPolyline:function(layerId,bodyId,id,params){
+				leftItemHtml[layerId].kids[bodyId].data.marks[id]=params;
+				leftItemHtml[layerId].kids[bodyId].data.marksPanel[id]=$("#"+id);
+			},
+			delPolygon:function(layerId,bodyId,polygonId){
+				delete leftItemHtml[layerId].kids[bodyId].data.polygon[polygonId];
+			},
+			delPolygonPanel:function(layerId,bodyId,polygonPanelId){
+				delete leftItemHtml[layerId].kids[bodyId].data.polygonPanel[polygonPanelId];
+			},
+			delPolyline:function(layerId,bodyId,markId){
+				delete leftItemHtml[layerId].kids[bodyId].data.marks[markId];
+			},
+			delPolylinePanel:function(layerId,bodyId,markPanelId){
+				delete leftItemHtml[layerId].kids[bodyId].data.marksPanel[markPanelId];
+			}
+		},
 		/**
 		 * 由于可以同时编辑多个地图，所以这边存储每个tab的实现
 		 */
@@ -201,11 +252,19 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'<i class="layui-icon layui-icon-delete" data-id="{{ d.id }}" lay-active="delItem" style="font-size: 15px;cursor: pointer;"></i> ',
 			'</div>',
 			'</div>',
-			'<div class="layui-card-body" id="{{ d.bodyId }}">',
-
+			'<div class="layui-card-body" >',
+			'<form class="layui-form" lay-filter="LeftLayerItemMenu" action="" id="{{ d.bodyId }}">',
+			'</form>',
 			'</div>',
 			'</div>',
 			'</div>',
+		].join(''),
+		LEFT_LAYER_SHAPE_ITEM = [//图形的单位
+			'<div class="left-layer-shape-item" data-id="{{ d.id }}">',
+			'<input type="checkbox" checked="" lay-skin="primary" name="like[{{ d.id }}]" title="{{ d.name }}">',
+			'<div class="left-layer-shape-item-text layui-bg-blue">{{ d.type }}</div>',
+			'<div class="left-layer-shape-item-menu"><i class="layui-icon layui-icon-edit" data-id="{{ d.id }}" lay-active="editLeftLayerShapeItem" ></i><i data-id="{{ d.id }}" lay-active="delLeftLayerShapeItem" class="layui-icon layui-icon-delete"></i></div>',
+			'</div>'
 		].join(''),
 		LEFT_MENU_ADD_LAYER_FORM = [
 			'<form id="left-menu-layer-add-form" class="layui-form layui-form-pane" action="" style="display:none;width:90%;margin:20px auto;" >',
@@ -222,8 +281,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'</form>'
 		].join(''),
 		LEFT_MENU_ADD_FORM = [
-			'<form id="left-menu-add-form" class="layui-form layui-form-pane" action="" style="display:none;width:90%;margin:20px auto;" >',
+			'<form id="left-menu-add-form" class="layui-form layui-form-pane" action="" lay-filter="leftMenuAddForm" style="display:none;width:90%;margin:20px auto;" >',
 			'<div class="layui-form-item">',
+			'<input type="hidden" name="layerId" >',
 			'<label class="layui-form-label">资源名称</label>',
 			'<div class="layui-input-block">',
 			'<input type="text" name="rn" autocomplete="off" lay-verify="required" placeholder="资源名称" class="layui-input">',
@@ -257,7 +317,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'</div>'
 		].join(''),
 		POLYLINE_MENU = [
-			'<form id="polyline-menu-add-form" class="layui-form layui-form-pane" action="" style="display:none;width:90%;margin:15px auto;" >',
+			'<form id="polyline-menu-add-form" class="layui-form layui-form-pane" lay-filter="polyLineMenuAddForm" action="" style="display:none;width:90%;margin:15px auto;" >',
+			'<input type="hidden" name="bodyId">',
+			'<input type="hidden" name="layerId">',
 			'<div class="layui-form-item">',
 			'<label class="layui-form-label" style="width:100%;">点列表</label>',
 			'</div>',
@@ -357,19 +419,34 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			}
 		}
 	}
-
-	function openItemMode(rn) {
+	/**
+	 * 开启某个模式
+	 * @param {Object} rn
+	 * @param {Object} id
+	 */
+	function openItemMode(rn,layerId,bodyId) {
+		setItemModeValue(rn,layerId,bodyId);
 		currentPaint = plainFunc[rn];
+	}
+	/**
+	 * 设置默认值
+	 * @param {Object} rt
+	 * @param {Object} id
+	 */
+	function setItemModeValue(rt,layerId,bodyId){
+		modeValue[rt](layerId,bodyId);
 	}
 
 	/**
 	 * 获得当前点的列表
 	 */
 	function currentPolyline() {
-		var arr = [];
-		var datas = latlngs.data;
+		var arr = [],
+		datas = latlngs.data,
+		layerId=currentShapeForm.layerId,
+		bodyId = currentShapeForm.bodyId;
 		for (var o in datas) {
-			var position = delPolylineMethod(o);
+			var position = delPolylineMethod(o,layerId,bodyId);
 			if (position) {
 				arr.push(position);
 			}
@@ -381,35 +458,40 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 	 * 清空所有多边形点的列表
 	 */
 	function clearAllPolyline() {
-		var datas = latlngs.data;
+		var layerId = currentShapeForm.layerId,
+		bodyId = currentShapeForm.bodyId,
+		datas = latlngs.data;
 		for (var o in datas) {
-			delPolylineMethod(o);
+			delPolylineMethod(o,layerId,bodyId);
 		}
+		latlngs.len = 0;
 	}
 
 	/**
 	 * 清空所有多边形
 	 */
 	function clearAllPolygon() {
-		var polygons=polylinesObj.polygon;
+		var layerId = currentShapeForm.layerId,
+		bodyId = currentShapeForm.bodyId,
+		polygons=leftItemHtmlOperator.data(layerId,bodyId).polygon;
 		for(var o in polygons){
-			delPolygonMethod(o);
+			delPolygonMethod(o,layerId,bodyId);
 		}
 	}
 	/**
 	 * 删除一个多边形
 	 * @param {Object} id
 	 */
-	function delPolygonMethod(id) {
-		var ploygon = polylinesObj.polygon[id].obj;
-		var ploygonPanel = polylinesObj.polygonPanel[id];
+	function delPolygonMethod(id,layerId,bodyId) {
+		var ploygon = leftItemHtmlOperator.data(layerId,bodyId).polygon[id].obj;
+		var ploygonPanel = leftItemHtmlOperator.data(layerId,bodyId).polygonPanel[id];
 		if (ploygon) {
 			ploygon.remove();
-			delete polylinesObj.polygon[id];
+			leftItemHtmlOperator.delPolygon(layerId,bodyId,id);
 		}
 		if (ploygonPanel) {
 			ploygonPanel.remove();
-			delete polylinesObj.polygonPanel[id];
+			leftItemHtmlOperator.delPolygonPanel(layerId,bodyId,id);
 		}
 	}
 
@@ -417,22 +499,23 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 	 * 删除一个点
 	 * @param {Object} id
 	 */
-	function delPolylineMethod(id) {
-		var mark = polylinesObj.marks[id];
-		var markPanel = polylinesObj.marksPanel[id];
-		var latlng = latlngs.data[id];
+	function delPolylineMethod(id,layerId,bodyId) {
+		var mark = leftItemHtmlOperator.data(layerId,bodyId).marks[id].obj,
+		markPanel = leftItemHtmlOperator.data(layerId,bodyId).marksPanel[id],
+		latlng = latlngs.data[id];
 		if (mark) {
 			mark.remove();
-			delete polylinesObj.marks[id];
+			leftItemHtmlOperator.delPolyline(layerId,bodyId,id);
 		}
 		if (markPanel) {
 			markPanel.remove();
-			delete polylinesObj.marksPanel[id];
+			leftItemHtmlOperator.delPolylinePanel(layerId,bodyId,id);
 		}
 		// 此为临时内容，直接置空就行。
 		if (latlng) {
 			var position = latlngs.data[id];
 			delete latlngs.data[id];
+			latlngs.len -= 1;
 			return position;
 		}
 	}
@@ -473,6 +556,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				//将对象放在本地
 				leftItemHtml[d.id] = {
 					obj: $("#" + d.id),
+					bodyObj:$("#"+d.bodyId),
 					kids: {}
 				}
 			});
@@ -482,7 +566,35 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			return false;
 		});
 		form.on('submit(addItem)', function(data) {
-			var field = data.field;
+			var field = data.field,
+				layerHtml = leftItemHtml[field.layerId],
+				layerBody = layerHtml.bodyObj,
+				kids = layerHtml.kids,
+				bodyId = uuid(),
+				layerId = field.layerId,
+				rt = field.rt;
+			//取出对应的body容器
+			// leftItemHtml[field.layerId].bodyObj;
+			laytpl(LEFT_LAYER_SHAPE_ITEM).render({
+				id: bodyId,
+				name:field.rn,
+				type:dropMapping[rt]
+			}, function(html) {
+				layerBody.append(html);
+				//面板和数据挂钩起来
+				leftItemHtml[layerId].kids[bodyId]={
+					obj:$("#" + bodyId),//面板
+					type:rt,//类型
+					data:null//数据
+				};
+				// polygonList.append(html);
+				// polylinesObj.polygon[id] = {
+				// 	obj: polygon,
+				// 	data: latlngs
+				// };
+				// polylinesObj.polygonPanel[id] = $("#" + id);
+			});
+			
 			// 以多边形为例子，随便点击地图上的几个位置，将会生成点，然后再决定是否将他们连接起来。
 			// 判断选择了什么。
 			/**
@@ -490,9 +602,12 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'<option value="1">圆(Circle)</option>',
 			'<option value="2">矩形(Rectangle)</option>',
 			 */
-			openItemMode(field.rt);
+			openItemMode(rt,layerId,bodyId);
+			//增加左边的选择框
+			
 			layer.closeAll();
-			plainFuncWindow[field.rt](true);
+			plainFuncWindow[rt](true);
+			form.render();
 			return false;
 		});
 
@@ -500,7 +615,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			connectPolygon: function(e) {
 				if (latlngs.len > 2) {
 					layer.confirm('此动作会清空当前列表里所有的点，并将他们组成新的图形，你确定要这样做吗?', function(index) {
-						var latlngs = currentPolyline();
+						var latlngs = currentPolyline(),
+							layerId = currentShapeForm.layerId,
+							bodyId = currentShapeForm.bodyId;
 						//将所有的数据，挂在到对应的多边形中
 						clearAllPolyline();
 						var polygon = L.polygon(latlngs, {
@@ -511,11 +628,10 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 							id: id,
 						}, function(html) {
 							polygonList.append(html);
-							polylinesObj.polygon[id] = {
+							leftItemHtmlOperator.insertPolygon(layerId,bodyId,id,{
 								obj: polygon,
 								data: latlngs
-							};
-							polylinesObj.polygonPanel[id] = $("#" + id);
+							});
 						});
 						layer.close(index);
 					});
@@ -532,8 +648,10 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			},
 			delPolygon: function(e) {
 				layer.confirm('你确定要删除该多边形吗?', function(index) {
-					var id = e[0].dataset.id;
-					delPolygonMethod(id);
+					var id = e[0].dataset.id,
+						layerId = currentShapeForm.layerId,
+						bodyId = currentShapeForm.bodyId;
+					delPolygonMethod(id,layerId,bodyId);
 					layer.close(index);
 				});
 				return false;
@@ -554,16 +672,24 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			},
 			delPolyline: function(e) {
 				layer.confirm('你确定要删除该点吗?', function(index) {
-					var id = e[0].dataset.id;
-					delPolylineMethod(id);
+					var id = e[0].dataset.id,
+						layerId = currentShapeForm.layerId,
+						bodyId = currentShapeForm.bodyId;
+					delPolylineMethod(id,layerId,bodyId);
 					layer.close(index);
 				});
 				return false;
 			},
 			polylineHit: function(e) {
 				var id = e[0].dataset.id;
-				polylinesObj.marks[id].togglePopup();
+				polylinesObj.marks[id].obj.togglePopup();
 				return false;
+			},
+			editLeftLayerShapeItem:function(e){
+				layer.msg('1');
+			},
+			delLeftLayerShapeItem:function(e){
+				layer.msg('1');
 			},
 			addLayer: function(e) {
 				layer.open({
@@ -579,6 +705,8 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			},
 			addItem: function(e) {
 				var id = e[0].dataset.id;
+				// 赋值给表单
+				form.val('leftMenuAddForm',{layerId:id});
 				layer.open({
 					type: 1,
 					title: '添加一个资源',
@@ -598,6 +726,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					var obj = leftItemHtml[id].obj;
 					obj.remove();
 					delete leftItemHtml[id];
+					//相关联的数据也要删除 todo
 					layer.close(index);
 				});
 				return false;
@@ -631,10 +760,10 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				//     fillOpacity: 0.5,
 				//     radius: 200000
 				// }).addTo(map);
-				var latlngs = []
-				var polyline = L.polyline(latlngs, {
-					color: 'red'
-				}).addTo(map);
+				// var latlngs = []
+				// var polyline = L.polyline(latlngs, {
+				// 	color: 'red'
+				// }).addTo(map);
 				var firstPoint = null;
 				//封装的方法，将点和全组合在一起，初始点不具有先，当存储点的线超过2的时候，开始有线连接
 				map.on('click', editMap);

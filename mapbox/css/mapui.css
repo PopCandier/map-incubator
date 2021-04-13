@@ -88,6 +88,24 @@ body {
 	left: 85%;
 }
 
+.left-layer-shape-item {
+	/* border: 1px solid #01AAED; */
+	padding-left: 5px;
+}
+
+.left-layer-shape-item-text {
+	width: 50%;
+	display: inline;
+	font-size: 12px;
+	padding: 2px;
+	padding-right: 5px;
+	border-radius: 5px;
+}
+
+.left-layer-shape-item-menu {
+	float: right;
+}
+
 .map-right-menu {
 	height: 95%;
 	padding: 20px;
@@ -119,6 +137,7 @@ body {
 	cursor: pointer;
 }
 
-.polyline-menu-item:hover{
+.polyline-menu-item:hover {
 	background-color: #707890;
 }
+
