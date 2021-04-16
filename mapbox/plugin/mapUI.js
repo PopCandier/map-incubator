@@ -182,13 +182,13 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			},
 			selectShapeItem:function(layerId,bodyId){
 				var obj = leftItemHtmlOperator.shapeMenuBody(layerId,bodyId),
-				checkObj = obj.find(".layui-form-checkbox");
+				checkObj = obj.children(".layui-form-checkbox");
 				checkObj.click();
 			},
 			unselectShapeItem:function(layerId,bodyId){
 				var obj = leftItemHtmlOperator.shapeMenuBody(layerId,bodyId),
 					checkObj = obj.find(".layui-form-checkbox");
-				obj.find("input").prop("checked", false);
+				obj.find("input[name='"+bodyId+"']").prop("checked", false);
 				checkObj.removeClass('layui-form-checked');
 			},
 			shapeMenuBody:function(layerId,bodyId){
@@ -286,11 +286,11 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		].join(''),
 		LEFT_LAYER_SHAPE_ITEM = [ //图形的单位
 			'<div id="{{ d.id }}" class="left-layer-shape-item" data-id="{{ d.id }}">',
-			'<input type="checkbox" lay-filter="activeCheck" lay-skin="primary" data-id="{{ d.id }}" data-type="{{ d.rt }}"  name="shape" title="{{ d.name }}">',
+			'<input type="checkbox" lay-filter="activeCheck" lay-skin="primary" data-id="{{ d.id }}" data-type="{{ d.rt }}" data-layerId="{{ d.layerId }}"  name="shape" title="{{ d.name }}">',
 			'<div class="left-layer-shape-item-text layui-bg-blue">{{ d.type }}</div>',
 			'<div class="left-layer-shape-item-menu">',
-			'<i class="layui-icon layui-icon-edit" data-id="{{ d.id }}" data-type="{{ d.rt }}" lay-active="editLeftLayerShapeItem" ></i>',
-			'<i class="layui-icon layui-icon-delete" data-id="{{ d.id }}" data-type="{{ d.rt }}"  lay-active="delLeftLayerShapeItem" ></i>',
+			'<i class="layui-icon layui-icon-edit" data-id="{{ d.id }}" data-type="{{ d.rt }}" data-layerId="{{ d.layerId }}" lay-active="editLeftLayerShapeItem" ></i>',
+			'<i class="layui-icon layui-icon-delete" data-id="{{ d.id }}" data-type="{{ d.rt }}"  data-layerId="{{ d.layerId }}" lay-active="delLeftLayerShapeItem" ></i>',
 			'</div>',
 			'</div>'
 		].join(''),
@@ -454,6 +454,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 	 * @param {Object} id
 	 */
 	function openItemMode(rn, layerId, bodyId) {
+		setItemModeValue(rn, layerId, bodyId);
 		currentPaint = plainFunc[rn];
 	}
 	/**
@@ -606,6 +607,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			// leftItemHtml[field.layerId].bodyObj;
 			laytpl(LEFT_LAYER_SHAPE_ITEM).render({
 				id: bodyId,
+				layerId:layerId,
 				name: field.rn,
 				rt:rt,
 				type: dropMapping[rt]
@@ -623,7 +625,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'<option value="1">圆(Circle)</option>',
 			'<option value="2">矩形(Rectangle)</option>',
 			 */
-			setItemModeValue(rt, layerId, bodyId);
+			
 			
 			
 			//openItemMode(rt, layerId, bodyId);
@@ -649,10 +651,25 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				type=currentShapeForm.type,
 				layerId=currentShapeForm.layerId,
 				bodyId=currentShapeForm.bodyId,
-				clickId = dataset.id,
+				// 点击了新产生的的layerid，clickId这里就是bodyId了
+				clickBodyId = dataset.id,
+				clickLayerId = dataset.layerid,
 				clickType = dataset.type;
-			console.log(clickId,clickType); //得到checkbox原始DOM对象
-			console.log(data.elem.checked); //是否被选中，true或者false
+			
+			if(typeof(layerId)=='undefined'){
+				// 第一次进入的时候，currentShapeForm是没有值得
+				openItemMode(clickType, clickLayerId, clickBodyId);
+			}else{
+				//否则就是有值，我们需要关闭上一个弹出的页面
+				plainFuncWindow[type](false);
+			}
+			console.log("之前的信息。",layerId,bodyId,type);
+			console.log("点击的信息。",clickLayerId,clickBodyId,clickType);
+			
+			
+			plainFuncWindow[clickType](true);
+			//console.log(clickId,clickType); //得到checkbox原始DOM对象
+			//console.log(data.elem.checked); //是否被选中，true或者false
 			//console.log(data.value); //复选框value值，也可以通过data.elem.value得到
 			//console.log(data.othis); //得到美化后的DOM对象
 		});
@@ -733,25 +750,13 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			},
 			editLeftLayerShapeItem: function(e) {
 				var dataset = e[0].dataset,
-				    id = dataset.id,
-					rt = dataset.type,
-					layerId = currentShapeForm.layerId,
-					bodyId = currentShapeForm.bodyId;
+				    clickId = dataset.id,
+					clickLayerId = dataset.layerid,
+					rt = dataset.type;
 				// layer.msg(id+" "+rt);
-				openItemMode(rt, layerId, bodyId);
-				plainFuncWindow[rt](true);
+
 				//创建的时候就选中
-				leftItemHtmlOperator.selectShapeItem(layerId,bodyId);
-				// 编辑的时候，自动选中
-				// leftItemHtmlOperator.shapeMenuBody(layerId,bodyId)
-				// .find("input[name='like["+id+"]]'").prop("checked", true);
-				//自动选中分为界面上的选中，和实际表单的选中
-				//layui-form-checkbox layui-form-checked
-				
-				// leftItemHtmlOperator.shapeMenuBody(layerId,bodyId).find("input").prop("checked", true);
-				// leftItemHtmlOperator.shapeMenuBody(layerId,bodyId).find(".layui-form-checkbox").addClass('layui-form-checked');
-				// console.log(leftItemHtmlOperator.shapeMenuBody(layerId,bodyId).children());
-				// console.log(leftItemHtml[layerId].kids[bodyId]);
+				leftItemHtmlOperator.selectShapeItem(clickLayerId,clickId);
 			},
 			delLeftLayerShapeItem: function(e) {
 				layer.msg('1');
