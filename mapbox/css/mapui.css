@@ -94,12 +94,17 @@ body {
 }
 
 .left-layer-shape-item-text {
-	width: 50%;
+	    /* width: 50%; */
 	display: inline;
 	font-size: 12px;
 	padding: 2px;
 	padding-right: 5px;
+	padding-left: 5px;
 	border-radius: 5px;
+	position: relative;
+	left: 60%;
+	top: -24px;
+	
 }
 
 .left-layer-shape-item-menu {
@@ -141,3 +146,20 @@ body {
 	background-color: #707890;
 }
 
+.circle-menu {
+	overflow-y: auto;
+	height: 175px;
+}
+    
+.circle-menu-item {
+	padding: 5px;
+	margin: 5px;
+	background-color: #2F4056;
+	color: white;
+	border-radius: 3px;
+	cursor: pointer;
+}
+
+.circle-menu-item:hover {
+	background-color: #707890;
+}
