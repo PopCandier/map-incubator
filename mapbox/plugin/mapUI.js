@@ -13,6 +13,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		LEFT_TREE_MENU = '#map-left-menu-resource-tree',
 		ADD_LAYER = "addLayer",
 		ADD_ITEM = "addItem",
+		ADD_DESC = "addDesci",
 		$ = layui.jquery,
 		element = layui.element,
 		util = layui.util,
@@ -33,7 +34,10 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		circleList = null,
 		polygonList = null,
 		circleForm = null,
+		shapItemForm = null,
 		LEFT_TREE_MENU_OBJ = null,
+		TextNode={//提示常量
+		},
 		isEdit = false, //是否是编辑
 		isView = false, //是否是预览
 		currentPaint = null, //当前是否是多边形的画图模式
@@ -367,6 +371,12 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		 */
 		leftItemHtml = {},
 		leftItemHtmlOperator = { //操作面板内容的对象
+			getDescri:function(layerId,bodyId,id){ // 获得一条描述
+				return leftItemHtml[layerId].kids[bodyId].data.desci[id];
+			},
+			insertDescri:function(layerId,bodyId,id,param){//插入一条描述
+				leftItemHtml[layerId].kids[bodyId].data.desci[id]=param;
+			},
 			checkDataExist: function(layerId, bodyId) {
 				return leftItemHtml[layerId].kids[bodyId].data != null;
 			},
@@ -521,7 +531,8 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		buildCircleObj = function(){
 			var obj = {
 				circle:{},//对应圆形的遮罩
-				circlePanel:{}//对应的圆形的面板
+				circlePanel:{},//对应的圆形的面板
+				desci:{}//增加描述
 			}
 			return obj;
 		},
@@ -531,6 +542,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				marksPanel: {}, //对应的多边形点的面板
 				polygon: {}, //对应的多边形的遮罩,obj表示地图中的图形实体，data表示包含的数据，是一个数据
 				polygonPanel: {} ,//对应多边形的面板
+				desci:{},//增加描述
 				latlngs:{ //暂存的列表数据
 					data:{},
 					len:0
@@ -732,9 +744,41 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'<div style="float: right;cursor:pointer;">',
 			'<i class="layui-icon layui-icon-delete" data-id="{{ d.id }}" lay-active="delCircle" style="font-size: 15px;cursor: pointer;"></i></div>',
 			'</div>'
+		].join(''),
+		SHAP_ITEM_MENU = [//图形弹出的菜单
+			'<ul class="shap-item-ul" data-layer="{{d.layerId}}" data-body="{{d.bodyId}}" data-id="{{d.id}}" data-type="{{d.type}}" >',
+				'<li lay-active="menuDescri">添加描述</li>',
+				'<li lay-active="menuDel">删除</li>',
+			'</ul>'
+		].join(''),
+		SHAP_ITEM_VIEW_FORM = [//图形信息的编辑表单
+			'<form id="shap-item-desc-form" class="layui-form layui-form-pane" lay-filter="shapItemViewForm" style="display:none;width:90%;margin:15px auto;" >',
+			'<input type="hidden" name="bodyId">',
+			'<input type="hidden" name="layerId">',
+			'<input type="hidden" name="id">',
+			'<input type="hidden" name="type">',
+			'<div class="layui-form-item">',
+			'<label class="layui-form-label">标题</label>',
+			'<div class="layui-input-block">',
+			'<input type="text" name="desName" autocomplete="off" lay-verify="required" placeholder="资源名称" class="layui-input">',
+			'</div>',
+			'</div>',
+			'<div class="layui-form-item layui-form-text">',
+			'<label class="layui-form-label">描述</label>',
+			'<div class="layui-input-block">',
+			  '<textarea  name="desContent" placeholder="为这个资源添加描述" class="layui-textarea"></textarea>',
+			'</div>',
+			'</div>',
+			'<div class="layui-form-item">',
+			'<button class="layui-btn" lay-submit="" lay-filter="addDesci">添加描述</button>',
+			'</div>',
+			'</form>'
+		].join(''),
+		SHAP_ITEM_VIEW_WIN = [ //预览模式下，点击图形弹出的描述界面
+			
 		].join('');
 	var mapUI = function() {
-		this.v = '0.0.1';
+		this.v = '0.6.1';
 	};
 
 	function uuid() {
@@ -1068,6 +1112,22 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			addItemForm.reset();
 			return false;
 		});
+		// 添加描述
+		form.on('submit(addDesci)', function(data) {
+			var field = data.field,
+				layerId = field.layerId,
+				bodyId = field.bodyId,
+				id = field.id;
+			leftItemHtmlOperator.insertDescri(layerId,bodyId,id,{
+				desName:field.desName,
+				desContent:field.desContent
+			});
+			layer.close(plainFuncIndex[ADD_DESC]);
+			form.render();
+			shapItemForm.reset();
+			return false;
+		});
+		
 		// 面板的多选框,选中将会激活预览
 		form.on('checkbox(activeCheck)', function(data) {
 			//点击编辑的某个资源图层的时候，或者切换他们之间的的时候
@@ -1127,10 +1187,66 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			}
 			//edi得到美化后的DOM对象
 		});
-
 		util.event('lay-active', {
-			hit:function(e){
-				layer.msg("1");
+			menuDescri:function(e){
+				var dataSet=e[0].parentElement.dataset,
+					id = dataSet.id,
+					layerId = dataSet.layer,
+					bodyId = dataSet.body,
+					type = dataSet.type,
+					desc = leftItemHtmlOperator.getDescri(layerId,bodyId,id),
+					parma = {};
+				if(desc)
+				{
+					parma={
+						layerId:layerId,
+						bodyId:bodyId,
+						id:id,
+						type:type,
+						desName:desc.desName,
+						desContent:desc.desContent
+					}
+				}
+				else
+				{
+					parma={
+						layerId:layerId,
+						bodyId:bodyId,
+						id:id,
+						type:type
+					}
+				}
+				//进行赋值
+				form.val('shapItemViewForm',parma);
+				plainFuncIndex[ADD_DESC]=layer.open({
+					type: 1,
+					title: '描述',
+					area: ['300px', '350px'],
+					shade: 0.2,
+					id: 'LAY_layuipro5',
+					btnAlign: 'c',
+					moveType: 1,
+					content: $(shapItemForm)
+				});
+				return false;
+			},
+			menuDel:function(e){
+				var dataSet=e[0].parentElement.dataset,
+					id = dataSet.id,
+					layerId = dataSet.layer,
+					bodyId = dataSet.body,
+					type = dataSet.type;
+				layer.confirm('你确定要删除该'+dropMapping[type]+'吗?', function(index) {
+					if("0"==type)
+					{
+						delPolygonMethod(id, layerId, bodyId);
+					}else if("1"==type)
+					{
+						delCircleMethod(id, layerId, bodyId);
+					}
+					layer.close(index);
+				});
+				return false;
 			},
 			delAllCircle:function(e){
 				//是否需要删除
@@ -1152,13 +1268,23 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				if (latlngs.length > 2) {
 					layer.confirm('此动作会清空当前列表里所有的点，并将他们组成新的图形，你确定要这样做吗?', function(index) {
 						var layerId = currentShapeForm.layerId,
-							bodyId = currentShapeForm.bodyId;
+							bodyId = currentShapeForm.bodyId,
+							id = uuid();
 						//将所有的数据，挂在到对应的多边形中
 						clearAllPolyline();
 						var polygon = L.polygon(latlngs, {
 							color: '#1E9FFF',
-						}).addTo(tabMap['1']).bindPopup("<p><a lay-active='hit'>点击我</a></p>");
-						var id = uuid();
+						}).addTo(tabMap['1']);
+						//初始化菜单
+						laytpl(SHAP_ITEM_MENU).render({
+							layerId:layerId,
+							bodyId:bodyId,
+							id:id,
+							type:"0"
+						},function(html){
+							polygon.bindPopup(html);
+						});
+						
 						laytpl(POLYGON_MENU_ITEM).render({
 							id: id,
 						}, function(html) {
@@ -1275,7 +1401,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				plainFuncIndex[ADD_LAYER]=layer.open({
 					type: 1,
 					title: '添加一个新图层',
-					area: ['15%', '20%'],
+					area: ['300px', '200px'],
 					shade: 0.2,
 					id: 'LAY_layuipro',
 					btnAlign: 'c',
@@ -1292,7 +1418,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				plainFuncIndex[ADD_ITEM]=layer.open({
 					type: 1,
 					title: '添加一个资源',
-					area: ['20%', '40%'],
+					area: ['300px', '350px'],
 					shade: 0.2,
 					id: 'LAY_layuipro2',
 					btnAlign: 'c',
@@ -1373,6 +1499,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			rightMenu = $("#" + MAP_BOTTOM_RIGH_MENU);
 		container.append(LEFT_MENU_ADD_LAYER_FORM);
 		container.append(LEFT_MENU_ADD_FORM);
+		container.append(SHAP_ITEM_VIEW_FORM);
 		container.append(POLYLINE_MENU);
 		container.append(CIRCLE_MENU);
 		topMenu.append(TOP_MENU);
@@ -1394,7 +1521,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		//作用于圆形的表单表单
 		circleForm = document.getElementById("circle-menu-add-form");
 		//记录已经绘制出的圆形
-		circleList = $("#circle-menu-list")
+		circleList = $("#circle-menu-list");
+		//添加描述的表单
+		shapItemForm = document.getElementById("shap-item-desc-form");
 	}
 
 	mapUI.prototype.render = function(config) {

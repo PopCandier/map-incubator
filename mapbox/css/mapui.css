@@ -163,3 +163,15 @@ body {
 .circle-menu-item:hover {
 	background-color: #707890;
 }
+
+.shap-item-ul li{
+	text-align: center;
+	cursor: pointer;
+	background-color:white;
+	padding:5px;
+	border-radius: 5px;
+}
+
+.shap-item-ul li:hover{
+	background-color: #DEDEDE;
+}
