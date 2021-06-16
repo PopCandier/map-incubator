@@ -1,4 +1,4 @@
-layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'laytpl','slider','colorpicker'], function(exports) {
+layui.define(['jquery', 'element', 'util', 'form', 'map','laytpl','slider','colorpicker'], function(exports) {
 	"use strict";
 	var MODULE_NAME = 'mapUI',
 		MODEL_EDIT = 'edit',
@@ -19,8 +19,6 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		util = layui.util,
 		form = layui.form,
 		L = layui.map,
-		tree = layui.tree,
-		dropdown = layui.dropdown,
 		laytpl = layui.laytpl,
 		slider = layui.slider,
 		colorpicker = layui.colorpicker;
@@ -37,6 +35,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		shapItemForm = null,
 		LEFT_TREE_MENU_OBJ = null,
 		TextNode={//提示常量
+			LAYER_DEL_TIP:'此操作将会删除该图层下所有的图形，你确定要删除吗?'
 		},
 		isEdit = false, //是否是编辑
 		isView = false, //是否是预览
@@ -48,6 +47,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				iconSize: [20, 20]
 			}
 		}),
+		supportShape=['polyline','polygon','circle'],
 		dropMapping = { //下拉框键值映射
 			"0": "多边形",
 			"1": "圆形",
@@ -91,7 +91,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 						lat = latlng.lat.toFixed(3),
 						lng = latlng.lng.toFixed(3),
 						id = uuid(),
-						mark = L.marker([lat, lng], {
+						polyline = L.marker([lat, lng], {
 							icon: new markIcon()
 						}).addTo(map).bindPopup("是这个点");
 					// 是否有对这个表单下面的内容是否有赋值
@@ -109,7 +109,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					}, function(html) {
 						polylineList.append(html);
 						leftItemHtmlOperator.insertPolyline(layerId, bodyId, id, {
-							obj: mark,
+							obj: polyline,
 							data: [lat, lng],
 							visiable:true
 						});
@@ -119,7 +119,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					//关于多边形，由于要存储 点 和 所购成多边形的图形
 					//取出点
 					var polygons = menuBody.data.polygon;
-					var marks = menuBody.data.marks;
+					var polyline = menuBody.data.polyline;
 					if(polygons)
 					{
 						for(var polygon in polygons)
@@ -130,21 +130,21 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 						}
 						menuBody.data.polygon = polygons;
 					}
-					if(marks)
+					if(polyline)
 					{
-						for(var mark in marks)
+						for(var mark in polyline)
 						{
-							marks[mark].obj.remove();
-							marks[mark].obj = null;
-							marks[mark].visiable = false;
+							polyline[mark].obj.remove();
+							polyline[mark].obj = null;
+							polyline[mark].visiable = false;
 						}
-						menuBody.data.marks = marks;
+						menuBody.data.polyline = polyline;
 					}
 					return menuBody;
 				},
 				showLayer:function(menuBody,map){
 					var polygons = menuBody.data.polygon;
-					var marks = menuBody.data.marks;
+					var polyline = menuBody.data.polyline;
 					if(polygons)
 					{
 						for(var polygon in polygons)
@@ -158,18 +158,18 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 						}
 						menuBody.data.polygon = polygons;
 					}
-					if(marks)
+					if(polyline)
 					{
-						for(var mark in marks)
+						for(var mark in polyline)
 						{
-							var ma = marks[mark];
+							var ma = polyline[mark];
 							var m = L.marker(ma.data, {
 								icon: new markIcon()
 							}).addTo(map).bindPopup("是这个点");
-							marks[mark].obj = m;
-							marks[mark].visiable = true;
+							polyline[mark].obj = m;
+							polyline[mark].visiable = true;
 						}
-						menuBody.data.marks = marks;
+						menuBody.data.polyline = polyline;
 					}
 					return menuBody;
 				},
@@ -199,7 +199,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					}
 					if(polylinePanelData)
 					{
-						var polylinePanels=polylinePanelData.marksPanel;
+						var polylinePanels=polylinePanelData.polylinePanel;
 						if(flag)
 						{
 							for(var polygonL in polylinePanels)
@@ -371,6 +371,15 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		 */
 		leftItemHtml = {},
 		leftItemHtmlOperator = { //操作面板内容的对象
+			getLayer:function(layerId){
+				return leftItemHtml[layerId];
+			},
+			getBody:function(layerId,bodyId){
+				return leftItemHtml[layerId].kids[bodyId];
+			},
+			delBody:function(layerId,bodyId){
+				delete leftItemHtml[layerId].kids[bodyId];
+			},
 			getDescri:function(layerId,bodyId,id){ // 获得一条描述
 				return leftItemHtml[layerId].kids[bodyId].data.desci[id];
 			},
@@ -422,25 +431,25 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				return leftItemHtml[layerId].kids[bodyId].data.polygon;
 			},
 			getPolyglines:function(layerId,bodyId){
-				return leftItemHtml[layerId].kids[bodyId].data.marks;
+				return leftItemHtml[layerId].kids[bodyId].data.polyline;
 			},
 			getPolygonPanels:function(layerId,bodyId){
 				return leftItemHtml[layerId].kids[bodyId].data.polygonPanel;
 			},
 			getPolylinePanels:function(layerId,bodyId)
 			{
-				return leftItemHtml[layerId].kids[bodyId].data.marksPanel;
+				return leftItemHtml[layerId].kids[bodyId].data.polylinePanel;
 			},
 			getPolyline:function(layerId, bodyId, id){
-				return leftItemHtml[layerId].kids[bodyId].data.marks[id];
+				return leftItemHtml[layerId].kids[bodyId].data.polyline[id];
 			},
 			insertPolygon: function(layerId, bodyId, id, params) {
 				leftItemHtml[layerId].kids[bodyId].data.polygon[id] = params;
 				leftItemHtml[layerId].kids[bodyId].data.polygonPanel[id] = $("#" + id);
 			},
 			insertPolyline: function(layerId, bodyId, id, params) {
-				leftItemHtml[layerId].kids[bodyId].data.marks[id] = params;
-				leftItemHtml[layerId].kids[bodyId].data.marksPanel[id] = $("#" + id);
+				leftItemHtml[layerId].kids[bodyId].data.polyline[id] = params;
+				leftItemHtml[layerId].kids[bodyId].data.polylinePanel[id] = $("#" + id);
 			},
 			insertCircle:function(layerId,bodyId,id,params){
 				leftItemHtml[layerId].kids[bodyId].data.circle[id] = params;
@@ -472,10 +481,10 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				delete leftItemHtml[layerId].kids[bodyId].data.polygonPanel[polygonPanelId];
 			},
 			delPolyline: function(layerId, bodyId, markId) {
-				delete leftItemHtml[layerId].kids[bodyId].data.marks[markId];
+				delete leftItemHtml[layerId].kids[bodyId].data.polyline[markId];
 			},
 			delPolylinePanel: function(layerId, bodyId, markPanelId) {
-				delete leftItemHtml[layerId].kids[bodyId].data.marksPanel[markPanelId];
+				delete leftItemHtml[layerId].kids[bodyId].data.polylinePanel[markPanelId];
 			},
 			switchVisiableLeftMenuShape:function(e){
 				var dataset = e[0].dataset,
@@ -518,6 +527,125 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				}
 				
 			}
+		},//删除工具 supportShape=['polygon','circle'],
+		delUtils = {
+			polyline:{
+				remove:function (id, layerId, bodyId){
+					var targetData = leftItemHtmlOperator.data(layerId,bodyId),
+						mark = targetData.polyline[id],
+						markPanel = targetData.polylinePanel[id],
+						datas = targetData.latlngs.data,
+						latlng = datas[id];
+					if(!mark.visiable){
+						layer.msg("你无法删除一个已被隐藏的点");
+						return;
+					}	
+					if (mark.obj) {
+						mark.obj.remove();
+						leftItemHtmlOperator.delPolyline(layerId, bodyId, id);
+					}
+					if (markPanel) {
+						markPanel.remove();
+						leftItemHtmlOperator.delPolylinePanel(layerId, bodyId, id);
+					}
+					if (latlng) {
+						targetData = leftItemHtmlOperator.data(layerId,bodyId);
+						delete targetData.latlngs.data[id];
+						targetData.latlngs.len -= 1;
+						return latlng;
+					}
+				},
+				clear:function() {
+					var layerId = currentShapeForm.layerId,
+						bodyId = currentShapeForm.bodyId,
+						datas = leftItemHtmlOperator.data(layerId,bodyId).latlngs.data;
+					for (var o in datas) {
+						delUtils.polyline.remove(o, layerId, bodyId);
+					}
+					var exsitData=leftItemHtmlOperator.data(layerId,bodyId);
+					exsitData.latlngs.data={};
+					exsitData.latlngs.len = 0;
+				}
+			},
+			polygon:{	
+				remove:function(id, layerId, bodyId) {
+					var ploygon = leftItemHtmlOperator.data(layerId, bodyId).polygon[id];
+					var ploygonPanel = leftItemHtmlOperator.data(layerId, bodyId).polygonPanel[id];
+					
+					if(!ploygon.visiable){
+						layer.msg("你无法删除一个已被隐藏的多边形");
+						return;
+					}
+					
+					if (ploygon.obj) {
+						ploygon.obj.remove();
+						leftItemHtmlOperator.delPolygon(layerId, bodyId, id);
+					}
+					if (ploygonPanel) {
+						ploygonPanel.remove();
+						leftItemHtmlOperator.delPolygonPanel(layerId, bodyId, id);
+					}
+				},
+				clear:function() {
+					var layerId = currentShapeForm.layerId,
+						bodyId = currentShapeForm.bodyId,
+						menuBody = leftItemHtmlOperator.shapeMenuBody(layerId,bodyId),
+						visiable = menuBody.find('.layui-icon-menu-fill')[0].dataset.visiable,
+						polygons = leftItemHtmlOperator.getPolygons(layerId, bodyId);
+						//找到内容的状态
+					if("false"==visiable)
+					{
+						layer.msg("该图层已被隐藏，无法执行删除操作。");
+						return ;
+					}else{
+						for (var o in polygons) {
+							delUtils.polygon.remove(o, layerId, bodyId);
+						}
+					}
+					
+				}
+			},
+			circle:{
+				remove:function(id,layerId,bodyId){
+					var circle = leftItemHtmlOperator.getCircle(layerId, bodyId,id);
+					var circlePanel = leftItemHtmlOperator.getCirclePanel(layerId, bodyId,id);
+					// 如果这个图形不可见，就意味着被隐藏了，那么就暂时不支持删除
+					if(!circle.visiable){
+						layer.msg("你无法删除一个已被隐藏的图形");
+						return;
+					}
+					if (circle.obj) {
+						circle.obj.remove();
+						leftItemHtmlOperator.deleteCircle(layerId, bodyId, id);
+					}
+					if (circlePanel) {
+						circlePanel.remove();
+						leftItemHtmlOperator.deleteCirclePanel(layerId, bodyId, id);
+					}
+				},
+				clear:function(){
+					var layerId = currentShapeForm.layerId,
+						bodyId = currentShapeForm.bodyId,
+						menuBody = leftItemHtmlOperator.shapeMenuBody(layerId,bodyId),
+						visiable = menuBody.find('.layui-icon-menu-fill')[0].dataset.visiable,
+						circles = leftItemHtmlOperator.getCircles(layerId,bodyId);
+						
+					//找到内容的状态
+					if("false"==visiable)
+					{
+						layer.msg("该图层已被隐藏，无法执行删除操作。");
+						return ;
+					}
+					else
+					{
+						for(var c in circles)
+						{
+							delUtils.circle.remove(c,layerId,bodyId);
+						}
+					}
+					
+				}
+			}
 		},
 		/**
 		 * 由于可以同时编辑多个地图，所以这边存储每个tab的实现
@@ -538,8 +666,8 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		},
 		buildPolylinesObj = function(){
 			var obj = {
-				marks: {}, //对应的多边形点的遮罩
-				marksPanel: {}, //对应的多边形点的面板
+				polyline: {}, //对应的多边形点的遮罩
+				polylinePanel: {}, //对应的多边形点的面板
 				polygon: {}, //对应的多边形的遮罩,obj表示地图中的图形实体，data表示包含的数据，是一个数据
 				polygonPanel: {} ,//对应多边形的面板
 				desci:{},//增加描述
@@ -591,8 +719,9 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'<div class="layui-card">',
 			'<div class="layui-card-header">{{ d.title }}',
 			'<div class="left-layer-item-menu">',
-			'<i class="layui-icon layui-icon-addition" data-id="{{ d.id }}" lay-active="addItem" style="font-size: 15px;cursor: pointer;"></i> ',
-			'<i class="layui-icon layui-icon-delete" data-id="{{ d.id }}" lay-active="delItem" style="font-size: 15px;cursor: pointer;"></i> ',
+			'<a href="javascript:;" class="layui-btn layui-btn-xs layui-btn-primary" ><i class="layui-icon layui-icon-addition" data-id="{{ d.id }}" lay-active="addItem" style="font-size: 15px;cursor: pointer;"></i></a> ',
+			'<a href="javascript:;" class="layui-btn layui-btn-xs layui-btn-primary" lay-active="clearLayer" data-id="{{ d.id }}">清空图层</a>',
+			'<a href="javascript:;" class="layui-btn layui-btn-xs layui-btn-primary" ><i class="layui-icon layui-icon-delete" data-id="{{ d.id }}" lay-active="delItem" style="font-size: 15px;cursor: pointer;"></i></a>',
 			'</div>',
 			'</div>',
 			'<div class="layui-card-body" >',
@@ -603,8 +732,8 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			'</div>',
 		].join(''),
 		LEFT_LAYER_SHAPE_ITEM = [ //图形的单位
-			'<form class="layui-form" lay-filter="{{ d.id }}" style="height: 27px;" >',
-			'<div id="{{ d.id }}" class="left-layer-shape-item" data-id="{{ d.id }}">',
+			'<form class="layui-form" id="{{ d.id }}" lay-filter="{{ d.id }}" style="height: 27px;" >',
+			'<div  class="left-layer-shape-item" data-id="{{ d.id }}">',
 			'<input name="checkState" type="hidden" value="false"/>',
 			'<input type="checkbox" lay-filter="activeCheck" lay-skin="primary" data-id="{{ d.id }}" data-type="{{ d.rt }}" data-layerId="{{ d.layerId }}"  name="shape" title="{{ d.name }}">',
 			'<div class="left-layer-shape-item-menu">',
@@ -781,6 +910,21 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 		this.v = '0.6.1';
 	};
 
+	function currentPolyline() {
+		var arr = [],
+			layerId = currentShapeForm.layerId,
+			bodyId = currentShapeForm.bodyId,
+			// datas = latlngs.data,
+			datas = leftItemHtmlOperator.data(layerId,bodyId).latlngs.data;
+		for (var o in datas) {
+			 var position = datas[o];
+			if (position) {
+				arr.push(position);
+			}
+		}
+		return arr;
+	}
+
 	function uuid() {
 		var temp_url = URL.createObjectURL(new Blob());
 		var uuid = temp_url.toString();
@@ -882,162 +1026,52 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 	function setItemModeValue(rt, layerId, bodyId) {
 		shapeUtils[rt].modeValue(layerId, bodyId);
 	}
-
-	/**
-	 * 获得当前点的列表
-	 */
-	function currentPolyline() {
-		var arr = [],
-			layerId = currentShapeForm.layerId,
-			bodyId = currentShapeForm.bodyId,
-			// datas = latlngs.data,
-			datas = leftItemHtmlOperator.data(layerId,bodyId).latlngs.data;
-		for (var o in datas) {
-			 var position = datas[o];
-			if (position) {
-				arr.push(position);
-			}
-		}
-		return arr;
-	}
-
-	/**
-	 * 清空所有多边形点的列表
-	 */
-	function clearAllPolyline() {
-		var layerId = currentShapeForm.layerId,
-			bodyId = currentShapeForm.bodyId,
-			datas = leftItemHtmlOperator.data(layerId,bodyId).latlngs.data;
-		for (var o in datas) {
-			delPolylineMethod(o, layerId, bodyId);
-		}
-		var exsitData=leftItemHtmlOperator.data(layerId,bodyId);
-		exsitData.latlngs.data={};
-		exsitData.latlngs.len = 0;
-	}
-
-	/**
-	 * 清空所有多边形
-	 */
-	function clearAllPolygon() {
-		var layerId = currentShapeForm.layerId,
-			bodyId = currentShapeForm.bodyId,
-			menuBody = leftItemHtmlOperator.shapeMenuBody(layerId,bodyId),
-			visiable = menuBody.find('.layui-icon-menu-fill')[0].dataset.visiable,
-			polygons = leftItemHtmlOperator.getPolygons(layerId, bodyId);
-			//找到内容的状态
-		if("false"==visiable)
-		{
-			layer.msg("该图层已被隐藏，无法执行删除操作。");
-			return ;
-		}else{
-			for (var o in polygons) {
-				delPolygonMethod(o, layerId, bodyId);
-			}
-		}
-		
-	}
-	/**
-	 * 清空所有的圆形
-	 */
-	function clearAllCircle(){
-		var layerId = currentShapeForm.layerId,
-			bodyId = currentShapeForm.bodyId,
-			menuBody = leftItemHtmlOperator.shapeMenuBody(layerId,bodyId),
-			visiable = menuBody.find('.layui-icon-menu-fill')[0].dataset.visiable,
-			circles = leftItemHtmlOperator.getCircles(layerId,bodyId);
-			
-		//找到内容的状态
-		if("false"==visiable)
-		{
-			layer.msg("该图层已被隐藏，无法执行删除操作。");
-			return ;
-		}
-		else
-		{
-			for(var c in circles)
-			{
-				delCircleMethod(c,layerId,bodyId);
-			}
-		}
-		
-	}
 	
-	/**
-	 * 删除一个圆
-	 * @param {Object} id
+	/**删除方法体
 	 * @param {Object} layerId
 	 * @param {Object} bodyId
 	 */
-	function delCircleMethod(id,layerId,bodyId)
-	{
-		var circle = leftItemHtmlOperator.getCircle(layerId, bodyId,id);
-		var circlePanel = leftItemHtmlOperator.getCirclePanel(layerId, bodyId,id);
-		// 如果这个图形不可见，就意味着被隐藏了，那么就暂时不支持删除
-		if(!circle.visiable){
-			layer.msg("你无法删除一个已被隐藏的图形");
-			return;
+	function delBody(layerId, bodyId,type){
+		//除了界面，还有包括layerid下面的所有内容，也就是body的内容
+		var body=leftItemHtmlOperator.getBody(layerId,bodyId),
+			panelObj = body.obj,
+			data = body.data;
+		// 面板里目前存在多边形和原型
+		// 目前多边形会有些区别，其他都是内容
+		//如果这个界面有存在打开的弹窗，或者其他，都会设置为空
+		//看这个是不是正在编辑的bodyId
+		leftItemHtmlOperator.switchCheckBox(bodyId,false);
+		shapeUtils[type].plainFuncWindow(false);
+		for(var shape in supportShape)
+		{
+			var propertyName = supportShape[shape];
+			if(data.hasOwnProperty(propertyName)){
+				// 多边形需要额外判断
+				delUtils[propertyName].clear();
+			}
 		}
-		if (circle.obj) {
-			circle.obj.remove();
-			leftItemHtmlOperator.deleteCircle(layerId, bodyId, id);
-		}
-		if (circlePanel) {
-			circlePanel.remove();
-			leftItemHtmlOperator.deleteCirclePanel(layerId, bodyId, id);
+		//到这里意味着所有的图形和ui都已经删除，可以直接将这个熟悉给删除掉
+		panelObj.remove();
+		leftItemHtmlOperator.delBody(layerId, bodyId);
+		if(currentShapeForm.bodyId==bodyId)
+		{
+			currentShapeForm = {};//直接设置为空
 		}
 	}
 	
 	/**
-	 * 删除一个多边形
-	 * @param {Object} id
+	 * 清空下方的所有图层
+	 * @param {Object} e
 	 */
-	function delPolygonMethod(id, layerId, bodyId) {
-		var ploygon = leftItemHtmlOperator.data(layerId, bodyId).polygon[id];
-		var ploygonPanel = leftItemHtmlOperator.data(layerId, bodyId).polygonPanel[id];
-		
-		if(!ploygon.visiable){
-			layer.msg("你无法删除一个已被隐藏的多边形");
-			return;
-		}
-		
-		if (ploygon.obj) {
-			ploygon.obj.remove();
-			leftItemHtmlOperator.delPolygon(layerId, bodyId, id);
-		}
-		if (ploygonPanel) {
-			ploygonPanel.remove();
-			leftItemHtmlOperator.delPolygonPanel(layerId, bodyId, id);
-		}
-	}
-
-	/**
-	 * 删除一个点
-	 * @param {Object} id
-	 */
-	function delPolylineMethod(id, layerId, bodyId) {
-		var targetData = leftItemHtmlOperator.data(layerId,bodyId),
-			mark = targetData.marks[id],
-			markPanel = targetData.marksPanel[id],
-			datas = targetData.latlngs.data,
-			latlng = datas[id];
-		if(!mark.visiable){
-			layer.msg("你无法删除一个已被隐藏的点");
-			return;
-		}	
-		if (mark.obj) {
-			mark.obj.remove();
-			leftItemHtmlOperator.delPolyline(layerId, bodyId, id);
-		}
-		if (markPanel) {
-			markPanel.remove();
-			leftItemHtmlOperator.delPolylinePanel(layerId, bodyId, id);
-		}
-		if (latlng) {
-			targetData = leftItemHtmlOperator.data(layerId,bodyId);
-			delete targetData.latlngs.data[id];
-			targetData.latlngs.len -= 1;
-			return latlng;
+	function clearLayer(e)
+	{
+		var layerId = e[0].dataset.id,
+			layer =leftItemHtmlOperator.getLayer(layerId),
+			kids = layer.kids,
+			needDel = [];//等待被删除的图层，如果某个图层被隐藏，无法被删除
+		for(var kid in kids)
+		{//e40da0d3-03b5-485b-8d72-a4f04e628407
+			
 		}
 	}
 
@@ -1053,8 +1087,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			}
 			var obj = {
 				id: uuidParent(),
-				type: field.rt,
-				area: []
+				type: field.rt
 			};
 			resourceBase[field.rn] = obj;
 			//在左边放上树形菜单
@@ -1062,9 +1095,8 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			//通过添加方法新增的只能是图层,图层下面可以新建资源
 			var d = {
 				title: field.rn,
-				id: obj.id,
+				id: obj.id,//区别内容的id
 				bodyId: obj.id.replace(LAYER, ''),
-				children: []
 			};
 			// leftTreeMenu.layer.push(d);
 
@@ -1188,6 +1220,14 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 			//edi得到美化后的DOM对象
 		});
 		util.event('lay-active', {
+			clearLayer:function(e)
+			{
+				layer.confirm('将会清空该面板下的所有图层，你确定要删除吗？', function(index) {
+					clearLayer(e);
+					layer.close(index);
+				});
+				return false;
+			},
 			menuDescri:function(e){
 				var dataSet=e[0].parentElement.dataset,
 					id = dataSet.id,
@@ -1239,10 +1279,10 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				layer.confirm('你确定要删除该'+dropMapping[type]+'吗?', function(index) {
 					if("0"==type)
 					{
-						delPolygonMethod(id, layerId, bodyId);
+						delUtils.polygon.remove(id, layerId, bodyId);
 					}else if("1"==type)
 					{
-						delCircleMethod(id, layerId, bodyId);
+						delUtils.circle.remove(id, layerId, bodyId);
 					}
 					layer.close(index);
 				});
@@ -1253,7 +1293,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				if(circleList.children().length>0)
 				{
 					layer.confirm('此动作会清空当前列表里所有的圆形，你确定要删除吗?', function(index) {
-						clearAllCircle();
+						delUtils.circle.clear();
 						layer.close(index);
 					});
 				}
@@ -1271,7 +1311,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 							bodyId = currentShapeForm.bodyId,
 							id = uuid();
 						//将所有的数据，挂在到对应的多边形中
-						clearAllPolyline();
+						delUtils.polyline.clear();
 						var polygon = L.polygon(latlngs, {
 							color: '#1E9FFF',
 						}).addTo(tabMap['1']);
@@ -1324,21 +1364,21 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					var id = e[0].dataset.id,
 						layerId = currentShapeForm.layerId,
 						bodyId = currentShapeForm.bodyId;
-					delPolygonMethod(id, layerId, bodyId);
+					delUtils.polygon.remove(id,layerId, bodyId);
 					layer.close(index);
 				});
 				return false;
 			},
 			clearPolygon: function(e) {
 				layer.confirm('此动作会清空当前列表里所有的多边形，你确定要删除吗?', function(index) {
-					clearAllPolygon();
+					delUtils.polygon.clear();
 					layer.close(index);
 				});
 				return false;
 			},
 			clearPolyline: function(e) {
 				layer.confirm('此动作会清空当前列表里所有的点，你确定要删除吗?', function(index) {
-					clearAllPolyline();
+					delUtils.polyline.clear();
 					layer.close(index);
 				});
 				return false;
@@ -1348,7 +1388,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					var id = e[0].dataset.id,
 						layerId = currentShapeForm.layerId,
 						bodyId = currentShapeForm.bodyId;
-					delPolylineMethod(id, layerId, bodyId);
+					delUtils.polyline.remove(id, layerId, bodyId);
 					layer.close(index);
 				});
 				return false;
@@ -1386,7 +1426,7 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 					var id = e[0].dataset.id,
 						layerId = currentShapeForm.layerId,
 						bodyId = currentShapeForm.bodyId;
-					delCircleMethod(id, layerId, bodyId);
+					delUtils.circle.remove(id, layerId, bodyId);
 					layer.close(index);
 				});
 				return false;
@@ -1395,7 +1435,21 @@ layui.define(['jquery', 'element', 'util', 'form', 'map', 'tree', 'dropdown', 'l
 				leftItemHtmlOperator.switchVisiableLeftMenuShape(e);
 			},
 			delLeftLayerShapeItem: function(e) {
-				layer.msg('1');
+				var dataset = e[0].dataset,
+					layerId = dataset.layerid,
+					bodyId = dataset.id,
+					type = dataset.type,
+					visiable=e.siblings()[0].dataset.visiable;
+				if('false'==visiable)
+				{
+					layer.msg('你无法删除隐藏的图层');
+					return ;
+				}
+				layer.confirm(TextNode.LAYER_DEL_TIP, function(index) {
+					delBody(layerId,bodyId,type);
+					layer.close(index);
+				});
+				return false;
 			},
 			addLayer: function(e) {
 				plainFuncIndex[ADD_LAYER]=layer.open({
